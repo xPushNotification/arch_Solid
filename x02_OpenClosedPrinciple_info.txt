@@ -1,0 +1,178 @@
+
+    Принцип 02: OPEN_CLOSED_PRINCIPLE
+-------------------------------------
+    --  Описание принципа:
+    ----------------------
+    Компоненты класса или сущности по факту разработки
+    и оттестирования должны быть открыты для расширения,
+    но закрыты для изменения.
+
+    Таким образом оттестированный код продолжает работать,
+    а новый код добавляется - не портя структуру старого.
+    добавляя интерфейсы (возможности), суб классы,
+    и обертки (композиция, наследование и тд и тп.).
+
+    Принцип не относится к баг-фиксам.
+    и замена все таки может касаться базового класса,
+    но в нём используемые объекты заменяться либо интерфейсами
+    либо обертками, либо родительскими типами от расширяемых
+    (в этом случае корректировки вообще не будет,
+    все сделает inheritance+overloading).
+
+    Как итог:
+        Единственный способ расширения системы - это полное изменение
+        целиком с глубоким регрессионным тестированием.
+        до этого изменения
+        стараемся наращивать количество объектов.
+    - и сразу -
+        на раннем этапе делаем абстракции для основных систем,
+        которые ПОТЕНЦИАЛЬНО могут расшириться
+
+    1. нет необходимости в регрессии
+    2. меньше вероятность ошибок
+
+    --  Ситуация создающая проблему:
+    --------------------------------
+    //
+    // -- оригинальная композиция объектов:
+    // ------------------------------------
+        class Weapon
+        {
+            String type;
+            int damage; // 0-100
+            int range;  // 0-100
+            Weapon(String type, int damage, int range)
+            {
+                this.type = type; this.damage = damage; this.range = range;
+            }
+            void attack()
+            {
+                System.out.println("Attack with the sword, and damage" + damage);
+            }
+        }
+        class Character
+        {
+            String name;
+            Weapon weapon;
+            Character(String name, Weapon weapon)
+            {
+                this.name = name; this.weapon = weapon;
+            }
+            void changeWeapon(Weapon newWeapon)
+            {
+                this.weapon = newWeapon;
+            }
+            void attack()
+            {
+                weapon.attack();
+            }
+        }
+        Weapon sword = new Weapon("sword",15,2);
+        Character character = new Character("Warrior",sword);
+        character.attack();
+        //
+        // -- появление непредвиденного расширения типа:
+        // ---------------------------------------------
+        Weapon crossbow = new Weapon("crossbow",40,100);
+        character.changeWeapon(crossbow);
+        character.attack(); <- удар мечом (!) : ну что надо лезть код менять?
+                               попытка смены кода - нарушение принципа (!)
+
+    --  Предлагаемое решение:
+    -------------------------
+    ввести интерфейс/базовый класс представляющий имеющиеся объекты
+    имеющиеся объекты наследовать от этого интерфейса
+    новые объекты наследовать от базового класса и появившихся интерфейсов
+    разделить таким образом поведение.
+
+    старое поведение останется в системе и станет "поведением по умолчанию"
+    таким образом код опирающийся на имеющийся на пострадает
+    и рефакторинг не потребуется
+
+    так, при добавлении, например "knife" нам потребуется тестирвоать
+    только объект "knife", а не тестировать "sword"/"crossbow"
+    то есть опорный код останется без изменений.
+
+    --  Итоговый вариант кода в судо:
+    ---------------------------------
+        //
+        // -- изменение поведения за счет расширения кода, а не изменения
+        // --------------------------------------------------------------
+        interface Attacker
+        {
+            void attack();
+        }
+        class Weapon implements Attacker
+        {
+            String type = "Sword"";     // <- по умолчанию выходит это "sword". см. attack()
+            int damage; // 0-100
+            int range;  // 0-100
+            Weapon(String type, int damage, int range)
+            {
+                this.type = type; this.damage = damage; this.range = range;
+            }
+            public void attack()        // <- где то может использовать такой же вариант, оставим его
+            {
+                System.out.println("Attack with the sword, and damage" + damage);
+            }
+        }
+        class Sword extends Weapon
+        {
+            Sword(String type, int damage, int range)
+            {
+                super(type, damage, range);
+            }
+
+            @Override
+            public void attack()
+            {
+                System.out.println("Attack with the sword, and damage:" + damage);
+            }
+        }
+        class Crossbow extends Weapon
+        {
+            Crossbow(String type, int damage, int range)
+            {
+               super(type, damage, range);
+            }
+
+            @Override
+            public void attack()
+            {
+                System.out.println("Attack with the crossbow, and damage:" + damage);
+            }
+        }
+
+        class Character
+        {
+            String name;
+            Weapon weapon;
+            Character(String name, Weapon weapon)
+            {
+                this.name = name; this.weapon = weapon;
+            }
+            void changeWeapon(Weapon newWeapon)
+            {
+                this.weapon = newWeapon;
+            }
+            void attack()
+            {
+                weapon.attack();
+            }
+        }
+
+        //
+        // как видно не меняется даже тип создаваемого объекта это Weapon как и было
+        //
+
+        // -- старый код работоспособен:
+        //
+        Weapon sword = new Weapon("sword",15,2);
+        Character character = new Character("Warrior",sword);
+        character.attack();
+
+        // -- новый код также вполне себе работает:
+        //
+        Weapon crossbow = new Crossbow("crossbow",40,100);
+        character.changeWeapon(crossbow);
+        character.attack();
